@@ -1275,7 +1275,7 @@ Difficult to grow a new community around an app. Leverage existing social networ
 
 Which ones? It depends. Understand your audience.
 
-Facebook? Twitter? Pinterest? Tumblr? Weibo? Email? SMS?
+Facebook? Twitter? Pinterest? Tumblr? Sina Weibo? Email? SMS?
 
 Present different info customized to network. Facebook looks different than Twitter, than Pinterest, than Email, than SMS.
 
