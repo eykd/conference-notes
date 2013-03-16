@@ -1250,7 +1250,7 @@ One button at the bottom of app changed everything: "Suggest a new category." Im
 
 Received feedback on search, added translations.
 
-But then you drown in feedback emails! Process required!
+But then you drown in feedback emails! Process/tools required! - for example http://www.uservoice.com
 
 ### 2. Internationalization
 
@@ -1289,7 +1289,8 @@ Likely 1% of users will comment, suggest, create. 9% share, tag. 90% lurkers. Ca
 
 Starting with one app, it's hard to think of building a brand.
 
-Bible Promises app -> BibleGram (Instagram w/ a Biblical twist).
+Bible Promises app -> Biblegram (Instagram w/ a Biblical twist).
+http://www.youtube.com/watch?v=bl_e-om3uxo
 
 - Visual consistency.
 - Cross-promotion
