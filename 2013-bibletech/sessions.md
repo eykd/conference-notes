@@ -645,3 +645,5 @@ All the bible editors use this process. Some fiction editors do their editing in
 DON'T try and get your editors to stop using Word. Let them use Word. Word outputs XML (docx). Train them to use structured styles. Do the XML behind the scenes.
 
 Divide between developmental editors (Word) and production/copy editors (->XML).
+
+You don't need huge end-to-end solutions. Let everyone at each stage use the best tools.
