@@ -531,3 +531,117 @@ Can store db in one file with no config.
 - Software stack not based on complex interrelationships, but simple, clean, thin interfaces between layers.
 - Simple API. Powerful query language.
 - Consistent API.
+
+
+## XML-based Workflows
+- Sean A. Harrison, Tyndale @saharrison
+- http://seanharrison.org/xmlworkflow
+- He's available to train in this process
+
+### Traditional Workflow
+
+- Stretches the editors very thin, as the editor becomes a bottleneck, esp. when dealing with many authors/freelancers.
+- Handoff to typesetter is more "toss it over the wall".
+  - Proofreading corrections via paper, PDF (or InCopy, if you're lucky)
+  - Typeset file is the de facto archival form of the content.
+- Ebooks/apps/web are outsourced to the lowest bidder.
+  - How are corrections made?
+  - Who is responsible for content quality?
+  - Esp. with Study Bibles, constant, ongoing corrections are necessary
+
+Tyndale has completely automated Bible ebook production.
+
+### XML Archive Workflow
+
+Centered around one archival XML repository.
+
+Inputs / Validation
+- Authoring
+- Develpomental eiting
+- Early reader feedback
+
+Interfaces / Curation (XML repo)
+- Intake
+- Editing
+- Validation
+- Review
+
+Outputs / Transformation
+- Layout
+- Proofreading
+- Printing
+- Distribution
+
+Requirements:
+- Version control is a necessity. NLT Study Bible kept all the Word docs in Subversion! No fear. Apparently, Tyndale's (nontechnical) editors work directly w/ version control via TortoiseSVN.
+- Validation on commit, or reject with an error message.
+- Filesystem access via working copy or WebDAV.
+- NLT executive editor (Mark Taylor), very non-technical user, used WebDAV w/ auto-versioning to read/edit every article in NLTSB.
+
+Inputs:
+- Word
+- Google Drive
+- Wordpress
+- Blogger
+
+Outputs:
+- Indesign
+- Epub
+- iBooks
+- Kindle
+
+#### XML Demonstration
+
+Appears that each article in the NLTSB has its own XML file. Much easier to track changes!
+
+- Open question: How does Word get transformed to XML?
+- Do Tyndale editors work directly in XML? YES. The whole Bible department is doing this.
+- Sean works directly to support editors when they have trouble.
+
+Each commit gets validated by the server, and is rejected if the schema doesn't validate.
+
+They use RelaxNG Compact schema, and python/lxml to validate.
+
+Goals: creating XML that works well in InDesign, can be transformed to apps, web.
+
+Very important to have pre-commit hooks to validate or reject commits.
+
+XSLT 1 very limited. He does some additional transformations using Python scripts.
+
+
+#### InDesign Output
+
+Circular Workflow: XML -> InCopy Markup Language (ICML) -> InDesign -> Proofreading -> Corrections -> XML
+
+Important to know who's "got the controls". Are corrections happening in XML or InDesign at a given time?
+
+Typesetter must be careful when editing, as InDesign ICML codes can be deleted but should not be.
+
+ICML is the only way. Indesign's XML import features are poorly designed and do not support important use cases.
+
+#### Web Output
+
+Real-time, transformed directly from canonical repo.
+
+### Amplitude python library
+
+http://code.google.com/p/amplitude
+
+"A simple, light, fast and powerful application tool chain and framework for Python."
+
+Includes a lot of his XML tools for validation, pre-commit hooks, etc.
+
+Whoah, he's driving Word, InDesign, Photoshop, etc. from Python scripts using win32com. Magic.
+
+### Book production
+
+Different editor, but similar process. "Use a workflow that makes sense." All Tyndale products are being done in a process similar to this!!!
+
+All the bible editors use this process. Some fiction editors do their editing in a wiki. Most of the book editors still use the Word -> InDesign, then XML processing happens in content composition department.
+
+
+### Editorial Culture
+
+DON'T try and get your editors to stop using Word. Let them use Word. Word outputs XML (docx). Train them to use structured styles. Do the XML behind the scenes.
+
+Divide between developmental editors (Word) and production/copy editors (->XML).
