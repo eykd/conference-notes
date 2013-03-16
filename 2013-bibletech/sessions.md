@@ -225,9 +225,10 @@ However, these also have radical effects on the Bible itself and the reading exp
  - Treat chapter and verse numbers as invisible metadata.
 
 
-@AdamGraber -- thesecondeclectic.blogspot.com
-@KeithWilliams -- clothedinchrist.org
+### Further reading
 
+- http://thesecondeclectic.blogspot.com/2013/03/recommended-reading-about-digital-books.html
+- http://www.clothedinchrist.org/
 
 
 ## Searching the Bible On The Go
