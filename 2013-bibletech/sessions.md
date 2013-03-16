@@ -1,21 +1,21 @@
 # BibleTech 2013
 
 ## A Semantic Referent Database
-Its Development, Challenges and Usefulness
-Scott Fleischman & Josh Westbury
+- Its Development, Challenges and Usefulness
+- Scott Fleischman & Josh Westbury
 
-Scope: People, places, things. Linking text to concepts. Names, pronouns, etc. across entire Hebrew and Greek texts.
-Ex. Ruth 1: the land (Judah), a man (Elimelech), etc.
-Collated from Hebrew & Greek, not a translation. Inserted translation text does not link to referents.
-Enables intertextual results: "the man" in Josh 6:24 -> 1 Kings 16:34.
-Feature: Explorer view. Get summary of all referents for a passage.
-Feature: Bible facts. How is this referent referred to throughout the Bible?
+- Scope: People, places, things. Linking text to concepts. Names, pronouns, etc. across entire Hebrew and Greek texts.
+- Ex. Ruth 1: the land (Judah), a man (Elimelech), etc.
+- Collated from Hebrew & Greek, not a translation. Inserted translation text does not link to referents.
+- Enables intertextual results: "the man" in Josh 6:24 -> 1 Kings 16:34.
+- Feature: Explorer view. Get summary of all referents for a passage.
+- Feature: Bible facts. How is this referent referred to throughout the Bible?
 
 ### Methodology
 
-Annotate people, places, things across entire Hebrew & Greek texts.
-No abstract concepts: love, etc. even when personified (e.g. Wisdom).
-BUT: Stone water jars at Wedding at Cana in John 2:6.
+- Annotate people, places, things across entire Hebrew & Greek texts.
+- No abstract concepts: love, etc. even when personified (e.g. Wisdom).
+- BUT: Stone water jars at Wedding at Cana in John 2:6.
 
 ### Heuristic Rules
 
@@ -79,10 +79,10 @@ Ruth 1:1 the land/Judah: evokes more than the territory, it's a concept more imp
 
 
 ## From Paper to Pixels
-The effects of Technology on the Bible.
-Josh Westbury/Scott Fleischman
-@AdamGraber -- thesecondeclectic.blogspot.com
-@KeithWilliams -- clothedinchrist.org
+- The effects of Technology on the Bible.
+- Josh Westbury/Scott Fleischman
+- @AdamGraber -- thesecondeclectic.blogspot.com
+- @KeithWilliams -- clothedinchrist.org
 
 Print bibles editorial team.
 
@@ -170,27 +170,27 @@ Print and Digital allow these to happen. The Church is on the leading edge. Bibl
 
 Digital, doing more that we've already been doing. But there are distinct differences!
 
-Print / Digital
-Standardized / Customizable
-Wholeness / Selectivity (search!)
-Sequentiality / Hypertextuality
-Selective Indexing (concordances) / Searchable
-Bounded / Edgeless
-Contextualized / Networked
-Static / Dynamic and remixable
+- Print / Digital
+- Standardized / Customizable
+- Wholeness / Selectivity (search!)
+- Sequentiality / Hypertextuality
+- Selective Indexing (concordances) / Searchable
+- Bounded / Edgeless
+- Contextualized / Networked
+- Static / Dynamic and remixable
 
 #### Communicating Value
 
 We represent the value of Scripture in different ways.
 
-Print / Digital
-Bindings / Software, hardware
-Paper quality / --
-Proportions / --
-Added Content / Added Content
-Source of Content / Source of Content
-Static Remixes / Navigation, Interface
-Design / Design
+- Print / Digital
+- Bindings / Software, hardware
+- Paper quality / --
+- Proportions / --
+- Added Content / Added Content
+- Source of Content / Source of Content
+- Static Remixes / Navigation, Interface
+- Design / Design
 
 ### Effects of Technology
 
@@ -269,20 +269,20 @@ DO THIS.
 
 
 ## Automatically Learning Topical Content
-Sean Boisen
-#BibleTech #BibleData
+- Sean Boisen
+- #BibleTech #BibleData
 
 http://www.semanticbible.com/other/talks/2013/BibleTech/LCV.html
 
 ### Outline
 
-The Logos Controlled Vocabulary (LCV) (http://www.semanticbible.com/other/talks/2010/BibleTech-LCV/BibleTech-LCV.html)
-The LCV Corpus
-Learning from the corpus:
-- Topic importance
-- References
-- Key terms
-- Topic relationships
+- The Logos Controlled Vocabulary (LCV) (http://www.semanticbible.com/other/talks/2010/BibleTech-LCV/BibleTech-LCV.html)
+- The LCV Corpus
+- Learning from the corpus:
+  - Topic importance
+  - References
+  - Key terms
+  - Topic relationships
 
 Semantic Organization at Logos: organizing the world's Biblical information
 
@@ -311,13 +311,13 @@ Manually created, maintained.
 
 Book > Article > Term > Reference: Terms-Weights-Concepts mapping
 
-34m words, 140k articles, annotated w/ concepts. All hand-crafted!!!
-~50 "independent" sources
-Varying styles and purposes
-13,000 concepts.
- - 56% have <= 5 sources
- - 95% have <= 20 sources
- - 140 concepts w/ 30 or more sources
+- 34m words, 140k articles, annotated w/ concepts. All hand-crafted!!!
+- ~50 "independent" sources
+- Varying styles and purposes
+- 13,000 concepts.
+  - 56% have <= 5 sources
+  - 95% have <= 20 sources
+  - 140 concepts w/ 30 or more sources
 
 ### Learning Concept to Reference Associations
 
@@ -369,10 +369,10 @@ http://bibletech.kellerdavis.com/
 Big Data
 
 
-### Franken-Bible (Algorithmic translation)
-Stephen Smith
-***REMOVED***
-www.adaptivebible.com
+## Franken-Bible (Algorithmic translation)
+- Stephen Smith
+- ***REMOVED***
+- www.adaptivebible.com
 
 Accelerating pace of new English translations
 
