@@ -81,8 +81,8 @@ Ruth 1:1 the land/Judah: evokes more than the territory, it's a concept more imp
 ## From Paper to Pixels
 - The effects of Technology on the Bible.
 - Josh Westbury/Scott Fleischman
-- @AdamGraber -- thesecondeclectic.blogspot.com
-- @KeithWilliams -- clothedinchrist.org
+- @AdamGraber -- http://thesecondeclectic.blogspot.com
+- @KeithWilliams -- http://clothedinchrist.org
 
 Print bibles editorial team.
 
