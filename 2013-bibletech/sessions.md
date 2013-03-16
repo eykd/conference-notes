@@ -1303,3 +1303,65 @@ http://www.slideshare.net/missrogue/fostering-online-communities-by-tara-hunt
 1. Lightweight social processes (sharing)
 2. Collaborative information structures (Flickr)
 3. High end collaboration (Wikipedia, Stackoverflow)
+
+Word of mouth is still the best way to spread a social media application.
+
+
+## Strong's Numbers and NLP
+Matthew Jonas, Olive Tree
+
+Started learning programming at Olive Tree with Perl. Moved to Python + NLTK.
+
+Any repetitive task that can be done by a human can be done by a script. Cost/benefit analysis required!
+
+Think through the steps of the task, and write a function for each step. Add heuristic logic for each decision.
+
+Question: How would I tag a Strong's Bible?
+
+What constitutes Strong's tagging? Is it universal? Maybe not. There are better systems, but not as popular.
+
+1:1 correspondence between Greek/English? No. Strong's system assumes direct correspondence though.
+
+If Strong's numebrs tagged to a KJV, one set of problems. Used as a generic system, another set of problems.
+
+### Strong's Numbering System
+
+Alphabetical list of all Greek and Hebrew words, but didn't work directly from the original texts, so he got weird results. Numbered them sequentially, but with gaps. No usability problem, just weird.
+
+For each concordance entry, gave context and index number. Index in the back. Great system for a lay person. Just have to know how to count.
+
+### Specific Concerns
+
+Differences between Textus Receptus and NA27. Some words in NA27 have no correspondence in Textus Receptus, so no Strong's Number. Many proprietary systems have sprung up to fill in the blanks.
+
+What about mapping Strong's Numbers directly to the Greek text?
+
+Problems with articles:
+
+"The translators of the KJV under the influence of the Vulgate, handle the Greek article loosely and inaccurately." A.T. Robertson, Greek Grammar
+
+Problems with pronouns:
+
+Variations on pronouns sometimes have different strong's numbers.
+
+Problems with Demonstrative:
+
+Missing demonstrative forms that have no number. Often solved by going back to the root form.
+
+Problems with the "be" verb:
+
+Peculiarities in the KJV translation resulted in under/over-tagging.
+
+Etc. etc. etc.
+
+### Actually doing it
+
+Can use extant Strong's numbers for a KJV verse to guide tagging in another translation.
+
+2/3rds of cases map directly. N-gram approach helps a lot in other cases. Still, an error every 7 or 8 verses. Not exactly an automated process. Could achieve higher accuracy with further refinement, but Strong's Number system breaks down under stress.
+
+Works best with literal translations that are close to the KJV in structure and style. He was working with RSV and NRSV.
+
+The machine-tagging problem approaches AI-level requirements.
+
+Other systems (BDAG, etc.) have advantages, but it's inescapable that languages are messy, squishy, slippery.
