@@ -1,6 +1,6 @@
 # How the Digital Library Metaphor Breaks Down
 
-***REMOVED***
+<email redacted>
 
 Premises
 
@@ -302,7 +302,7 @@ Not just piling up data, but helping data to be understood.
 - …
 
 David Trotz
-***REMOVED***
+<email redacted>
 
 Demo:
 http://olivetreebible.github.io/bt15demo

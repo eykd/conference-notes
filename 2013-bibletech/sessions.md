@@ -374,7 +374,7 @@ Big Data
 
 ## Franken-Bible (Algorithmic translation)
 - Stephen Smith
-- ***REMOVED***
+- <email redacted>
 - www.adaptivebible.com
 
 Accelerating pace of new English translations
@@ -713,7 +713,7 @@ Can you trust your Bible software? Yes and no. It's a tool. Get to know it. Beco
 
 ## Bible Search Systems
 Neil Rees
-***REMOVED***
+<email redacted>
 Putting the fun back into fundamentalism.
 
 Or, why most Bible search systems don't work very well.
@@ -1234,7 +1234,7 @@ For you technologists wanting to add community to your tech, you absolutely MUST
 
 ## Seven Ways to Build Your Bible App Community
 - Matt Mayer
-- ***REMOVED***
+- <email redacted>
 - @matthewmayer
 - http://www.reigndesign.com/
 
