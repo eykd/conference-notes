@@ -1,0 +1,1993 @@
+# Thinking in Coroutines
+
+Lukasz Langa
+
+@llanga
+
+Multithreading in Python is problematic.  At Facebook, they saw a "CPU leak", where the GIL led to a thread that increasingly hogged the CPU over time.
+
+Asyncio is adding syntax for what Twisted has been doing for years. Glyph contributed to asyncio.
+
+What is asyncio? An event loop that calls callbacks. No real concurrency, but maximizes the use of a single thread.
+
+Not a FIFO loop, uses OS select().
+
+What happens if a callback is slow? Everything else will have to wait.
+
+Asyncio has a setting to warn about slow callbacks.
+
+Instead of using normal functions, define coroutine functions.
+
+    async def anything(i):
+        await asyncio.sleep(i)
+
+anything -> coroutine function
+
+anything(1) -> coroutine
+
+Coroutines are composable. Create tasks, then wait until they're complete.
+
+    tasks = [loop.create_task(c()) for c in whatever]
+
+    loop.run_until_complete(asyncio.wait(tasks))
+
+Results are stored on the task.
+
+## Calling a coroutine
+
+Outside a coroutine,
+
+    task = loop.create_task(coro())
+    result = loop.run_until_complete(coro())
+
+Inside a coroutine:
+
+    task = loop.create_task(coro())
+    result = await coro()
+
+Switch points are explicit, not implicit as with threads.
+
+Beyond network IO, asyncio can spin off subprocesses.
+
+Asyncio has synchronization primitives, but perhaps use queues first!
+
+3rd party libs: aiohttp, aiopostgres, aiomysql
+
+For speed: `uvloop` drop-in fast replacement for asyncio default event loop.
+
+## Dealing with existing blocking APIs:
+
+"Executors" run slow, blocking stuff inside a thread from a thread pool. Slower
+than asyncio equivalent (because of the GIL). Process pool available too for
+executors, but you pay the pickle serialization price.
+
+
+## Random advice!
+
+- Use Python 3.5+ (async and await keywords, better debugging, garbage collection)
+- Write unit tests!! Easier for asyncio than threaded stuff
+- Set up debugging! Asyncio friendly to debugging.
+  - Set up logging.
+  - Set up gc debugging `gc.set_debug(gc.DEBUG_UNCOLLECTABLE) # !!!`
+- Do NOT use StopIteration!!! Can return from generator now.
+- Prefer processpool executors. No GIL surprises!
+- Read the docs, don't be afraid of the source. It's a readable reference implementation.
+-
+
+
+# A tale of concurrency through creativity in Python: a deep dive into how gevent works
+
+Kava Joshi
+
+David Beazley has a good talk on the GIL.
+
+Options for concurrency:
+
+- multiprocessing
+- threading
+- event-driven programming (twisted, asyncore, asynchat, etc.)
+- green threads!
+
+## Green Threads
+
+- user space: OS does not create or manage them
+- cooperatively scheduled: OS does not schedule or preempt them
+- lightweight: 20k-30k green threads on a process
+
+
+## Building blocks
+
+Big G Greenlets subclass small g greenlets.
+
+    from gevent.greenlet import greenlet
+
+Small g greenlets provide a switching mechanism, sort of like stackless control
+flow. These are just coroutines.
+
+Gevent is implemented in C and manipulates the C stack.
+
+greenlet() allocates a struct in the heap. Every greenlet has a run function
+and a parent. Switching saves a stack pointer for the current thread of
+execution then puts something else on the stack. Uses "stack slicing"
+implemented in assembly to manipulate the stack, copying slices of the stack to
+the heap, then resetting the stack to reconstruct the previous thread of
+execution.
+
+Gevent uses greenlets for coroutines via assembly-based C stack-slicing.
+
+### libev
+
+Gevent uses the libev event loop as an API to register event_handler callbacks.
+
+"Hey loop, wait for a write on this socket, then call this callback when it
+happens." But you need a non-blocking socket to do that.
+
+Inside the event loop, pre_block_watchers, integrate other event mechanisms to exercise coroutines.
+
+## How does gevent tie everything together?
+
+Gevent has a "hub" greenlet that controls the rest of the greenlets in the loop.
+
+g.start() registers the switch function into the parent event loop as a pre-block watcher.
+
+g.join() switches into the hub greenlet and runs the main loop: loop.run(),
+which calls all pre block watchers, which switch around. The hub ties everyting
+together.
+
+How does using gevent get us async IO? The network still blocks!
+
+Gevent monkey-patches parts of the stdlib, esp. socket, with cooperative non-blocking sockets.
+
+## minuses
+
+gevent isn't perfect!
+
+- No parallelism
+- non-cooperative code will block the whole process!
+  - Use pure python libraries over C-extensions
+  - compute-bound greenlets will block; use geevent.sleep(0)
+  - use greenlet-blocking detection!
+- monkey-patching introduces an ordering dependency to imports!
+
+## ...but
+
+- excellent for workloads that are i/o bound, highly concurrent -> 20-30k concurrent connections
+- It's web scale!
+
+
+# Usable Ops: How to make web infrastructure management easier
+
+Kate Heddleston, Joyce Jang
+
+joycejang.com
+@_joyjejang
+
+kateheddleston.com
+@heddle317
+
+## Why?
+
+Beginning with on-boarding process. Kate started engineering on-boarding
+programs at lots of different companies. Wide breadth of experienc in a few
+short years.
+
+Joyce saw a company grow from 30 to 200. Tricky and "exciting" programs at that
+scale of growth. Saw common friction points of scaling tech; less about
+implementation, more about deployment and rollout. Building better automation
+tools allows larger scale of team growth.
+
+High level workflow:
+
+- Develop
+- Review code
+- Run automated tests
+- Eploy to staging
+- Deploy to production (Rollback if there's an issue)
+- Monitor
+
+Typically a wall between application engineers and devops engineers. Currently,
+it's hard to get code out to test and production environments. When these tools
+are complex, on-boarding is HARD.
+
+We approach these things as technical problems. But the human problems are the
+real issue: bad team process and human error. Humans don't function like
+computers, so we need the right abstractions to create the human computer
+interface.
+
+
+## Answering these 3 questions:
+
+1. What is usability?
+2. Why is usability important for web infrastructure?
+3. How do we build usable web infrastructure?
+
+
+## What is usability?
+
+How do you turn on a light? Don Norman, "The Design of Everyday Things". When
+he gave presentations, he would ask someone to dim the lights. Turning the
+lights on or off is hard. You have to know where the switch is, how to work it,
+and which light it controls.
+
+Over 150 types of switch at Home Depot!
+
+How do you set your shower temperature? How do you open a door?
+
+Key vocab: "affordances": how an object tells you to interact with it, without
+having to label the object or put instructions on it. Labels and instructions
+belie "unintuitive" objects. The best affordances provide visual and tactile
+clues, and allow for experimentation and experiential learning.
+
+What are the consequences of bad usability? Everything from embarrasment to
+injury to death! Road infrastructure requires good usability. Poor usability
+means more accidents!
+
+After post-war explosion of cars. DOT brought in an engineer, Albert Botts, to
+develop reflective lane markers: box dots. Usability improvement, reduced human
+errors and subsequente accidents.
+
+Web infrastructure needs to be learnable and usable.
+
+## Why is usability important for web infrastructure?
+
+To reduce human error, and increase the visibility of the system's state.
+
+Software is a man-made object! But it's abstract, and unclear how to apply
+usability philosophies.
+
+Version control showed up in the 80's. Subversion in the 2000s, etc. Enter
+Github, a productivity platform solving the problem of helping teams to
+collaborate on editing documents together.
+
+Github builds on version control, building on file editing.
+
+Usability is the last step in any abstraction hierarchy.
+
+What are the consequences of bad usability in web infrastructure?
+
+1. Errors. Lost data, system goes down.
+
+   If dev tools are hard to use, engineers will avoid them, or try to use them and
+   use them incorrectly. Access points need to be human-usable.
+
+2. Scalability. Hard to hire and train engineers if the system is too
+   difficult.
+
+   > If your system is too complex for your entire team to use safely, it is
+   > too complex. Period.
+
+3. Friction. Slows down or endangers success of applications, puts app at mercy
+   of devops!
+
+   When it comes to software, there are lots of things in play, and this
+   demands separation of responsibilities. But this requires the proper
+   abstractions!
+
+
+## Usability vs. Security
+
+Security through complexity is the same as security through obscurity. A secure
+door in the Pentagon should still be as usable to a credentialed user as any
+other door. Security and usability are separate concerns.
+
+
+## How do we build usable web infrastructure?
+
+Automate the core processes; expose human-usable interfaces.
+
+### How do you change system installations?
+
+Use containers! (Suspend your cynicsm!)
+
+Containers fix system installations, such that system installations are changed
+the same way as code is changed. Docker is apparently much nicer than Chef. One
+workflow!
+
+Containers link system installations and code changes. The Dockerfile lives in
+the repo. Packaging it all up reduces human errors.
+
+
+### How do you deploy code? Make it a big red button!
+
+This way the focus is on the intention, not on the process details. No manual
+steps. What am I deploying, and to where? Do I want to do this now? Press the
+button. No? Don't press the button.
+
+Abstract the processes that require human intent away from things that can be
+handled automatically. Build good abstractions!
+
+
+### How do you know where you are in the system?
+
+How do you orient yourself within the system of services. Build navigation and
+collaboration tools! The best companies that have platforms that help them to
+review and deploy code changes to services.
+
+No more wiki pages with boxes and arrows! Needs to be realtime and
+interactive. Include charts and grafts, improve visibility of what's going on.
+
+## 10 Usability Heuristics
+
+Jakob Nielsen
+
+- Visibility of system status
+- Match between system and real world
+- User control and freedom
+- Error prevention
+- Consistency and standards
+- Recognition rather than recall
+- Flexibility and efficiency of use
+- Aesthetic and minimalist design
+- Help users recognize, diagnose, and recover from errors
+- Help and documentation
+
+
+## Start with a checklist!
+
+"The Checklist Manifesto"
+
+After the checklist, then go to automation.
+
+
+
+# The Cobbler's Children have No Shoes, building better tools for ourselves
+
+Alex Gaynor
+
+http://github.com/alex
+http://speakerdeck.com/alex
+
+## A short history of tools
+
+Everything has version control, right?
+
+Issue trackers are common, not universal. Just a mailing list, or IRC channel, or forum.
+
+Continuous integration is not universal; now extremely common.
+
+Code review tools! Often supported by a tool
+
+Expected to have deployment automation.
+
+
+## Emerging trends
+
+- CI for PRs. Run the tests *before* you merge to trunk!
+- Linting! `bandit` checks for bad security practices. Some communities moving
+  away from linters to automatic code formatters.
+- Automated coverage tracking.
+- livegrep.com -- instantaneous regex search over large bodies of code
+- github.com/facebook/mention-bot -- suggests reviews based on blame info!
+
+## Workflow
+
+- Small branches, PR, review, merge, deploy
+
+
+## Build more tailored tools
+
+### Automation > Process
+
+Automation scales better! Human processes break down at scale. Encoding process
+into a tool allows changing the process to become a pull request rather than a
+training session. And, you always know what the correct behavior is! No drift
+between documentation and process.
+
+### Existing tools have APIs for integration!
+
+Examples are using Github's API.
+
+## Idea: Issues
+
+Write bots that:
+
+- Create an issue
+- Add/remove labels
+- Add a comment
+- Assign to someone
+- Add commit status
+
+### Howto
+
+    pip install github3.py
+
+Create a bot account and use reduced-scope tokens for authentication.
+
+## Idea: HTTPS certificate expiration
+
+Be proactive about checking cert expiration!
+
+If a cert is going to expire, file an issue! Call the create_issue method.
+
+Oh hey, don't file an issue if there's an open issue already.
+
+## Idea: Auto-labeling
+
+Create a bot that will add the security label for something that might be relevant.
+
+Github webhooks: when a certain event happens, make a request to a web service.
+
+Add security label to sensitive PRs: Grab both he issue and pr, check which
+files are impacted, if a secruity-related file is affected, add the security
+label.
+
+## Idea: requirements.txt bumper
+
+When a security release comes out, auto-bump the Django version and submit a PR!
+
+
+## Idea: UI change reviewer
+
+When the UI changes, how do you tell? Was it purposeful? Is it correct?
+
+When tests run, use a headless webkit to capture screenshots. Check it against
+the existing app screenshot. If it's different, flag the PR with a comment.
+
+Tool called Depictit for visually diffing screenshots
+
+## Idea: approval process commit status
+
+Start a PR with a failed commit status; upgrade to passing when the PR has been
+approved by enough people (driven by comments).
+
+### Side note:
+
+These bots are small! Sometimes just 10 lines of code.
+
+Make it easy to manually trigger a bot (gives you a retry behavior, especially in the case of a bug).
+
+---
+
+# Pythons in a container: Lessons Learned Dockerizing Python Micro-Services
+
+Dorian Pula
+@dorianpula
+http://dorianpula.ca
+
+Has `Rookeries` Flask-based CMS
+
+- Lessons learned using Docker for Flask REST API and apps
+- Incorporating various tools that Docker and docker-compose provide for devops workflow
+- The usefulness of unlearning some accepted patterns in python dev, when working w/ Docker
+
+- NOT an intro to basic Docker/WSGI app dev
+- NOT about Docker machine (cool as it is)
+- NOT about advanced docker wizardry
+- NOT an expose on why you must or must not use Docker
+
+## Microservices + Docker
+
+Imagine buildan app for new hypothetical loyalty program for sprint
+contributers
+
+Earn points per commit or issue. Redeem points for essential sprint goods
+(coffee, poptarts, or dogecoin)
+
+## Why microservices?
+
+Multple services built by multiple teams.
+
+Benefits:
+
+- Smaller, less complex codebases.
+- Enabled independence between codebases & teams
+- More flexible scaling schemes (tech & organizational)
+
+Drawbacks:
+
+- Distributed codebases hardet to infer; may contain implicit interservice dependencies
+- More complex orchestration, monitoring, provisioning
+
+## Why use docker?
+
+- Containers lighter in memory and processing than VMs
+- Isolated user-space instances vs. machine emulation
+- Docker uses cached/immutable layered file system
+- Better tooling
+- quick spin up of container/environments
+- Easily create, share, and publish images to registries
+- Unified workflow that replaces otehr tools: chroot jails, LXC, Vagrant, etc.
+
+
+## Docker Compose
+
+Specify with docker-compose.yaml...
+
+... and start up with `docker-compose up`.
+
+## Docker Workflow
+
+- Docker + compose replaces a vagrant and VM workflow
+- vagrant up + vagrant ssh + run $app_command -> docker run $app_command
+- vagrant halt -> docker stop
+- vagrant status -> docker ps
+- vagrant provision -> docker build
+- vagrant destroy -> docker stop + docker rm
+- vagrant box list, remove -> docker images, docker rmi
+
+
+## Building good docker images
+
+Learned early the importance of having good docker images.
+
+- Each step in a dockerfile can create a new layer in filesysetm.
+- Minimize number of separate RUN steps. One command is better than multiple
+  commands and layers.
+- Make layers cocheable: cached layer reuse if no checksum change in source
+- Use base images for heavily repeated steps.
+- See ONBUILD command for making dynamic base images
+- Expose ports and volume maps to document image.
+
+
+## Python and WSGI apps
+
+Web servers
+
+- Don't run a web server on your container. Use an external proxy or container instead.
+- Just run WSGI apps using a WSGI app server: uWSGI or Gunicorn (on a port)
+
+Virtualenvs!
+
+- Don't need 'em! The container is already an isolated system.
+- Install directly into the system Python site packages
+
+
+## Debugging containers
+
+You want a minimal image, so no SSH daemon...
+So how do you debug a running container?
+
+- Run Bash (or other command) on a Running Service!
+        docker-compose exec $SERVICE_NAME /bin/bash
+
+- Inspect a service's logs (stdout & stderr)
+
+        docker-compose logs $SERVICE_NAME
+
+- Inspecting a running container's setup
+
+        docker inspect $CONTAINER_ID > ...
+
+## Persistence, configs, and processes
+
+Volume maps:
+
+- Changes to container lost after container destroyed
+- Volume maps to external host folder for persistence
+- Another pattern is using separate docker data containers
+
+Configuration
+
+- Prefer using environment variables for configuration
+- Volume mapped configs maybe a warning sign of an overly complex setup or a config in need of refactoring
+
+Managing processes
+
+- Use supervisord or runit to control multiple processes
+- Consider refactoring containers to not need that
+
+
+## Testing + Tooling
+
+Testing
+
+- Docker adds consistency in your CI environments!
+- Simple setup for a Docker host
+- Control over what is in container == repeatable workflow and simpler test env
+- Cloud-based CI options with Docker support out there
+
+Tooling
+
+- Docker tool defaaults, options, and internal API radically differ from version to version
+- Don't build your own tooling! If you can avoid it...
+- Docker-py: a Python client library for working w/ Docker
+
+## Deployment & Scaling
+
+Production environments have lots of moving parts. You're setting up a private
+cloud. Considerations:
+
+- Load balancing and network topology, HAProxy & Nginx, etc.
+- Provisioning: automated, repeatable setup for non-Docker systems (e.g. ansible, puppet, salt)
+- Monitoring: look at app health, app behavior, system resources: nagios, pingdom, new relic
+- Logging: multiple log streams need to be aggregated to correlate events (e.g. Splunk)
+
+## Cloud Infrastructure
+
+- Managing cloud infrastructure is hard!
+- You need tooling and automation
+- Don't build your own unless you want to support it to end of time!
+- Use Docker Swarm, Kuberetes, OpenStack Magnum, CoreOS Fleet
+
+
+## Lessons learned
+
+- Microservices and Docker improve building and deploying complex systems. But
+  neither is a cure-all.
+- Good development and deployment process matter. Docker has a decent workflow.
+- Expect lots of additional infrastructure arround microservices
+- Avoid building your own tooling!
+- Use Docker containers to do effective isolation (no virtualenv)
+- Good app design goes a long way to enable all the above
+
+## Resources
+
+Jared Kerim's Django Docker template
+github.com/jaredkerim/django-docker-compose
+
+12 factor apps: 12facto.rnet
+
+Rookeries: Dockerized Workflow Example:
+bitbucket.org/dorianpula/rookeries/ (docker_compose_workflow branch)
+
+
+---
+
+# Building Protocol Libraries the Right Way
+
+Twitter: @lukasaoz
+
+Original talk name: Why all your libraries are garbage and all but one of mine
+are too!
+
+Covering a design antipattern:
+
+## Python HTTP is great
+
+- Requests/urllib3/HTTPie
+- Gunicorn
+- aiohttp
+- Twisted
+- Tornado
+
+They all have one problem in common: 0% shared code! (Some wrap each other.)
+They don't share any *interesting* code. This is odd: code re-use is great, and
+a core principle of OO and open source, right?
+
+Code re-use is great with well-defined problems with clearly acceptable
+results. We want to avoid reinventing wheels.
+
+Examples:
+
+- parsing file formats
+- compression algorithms
+- network protocol parsers
+
+There is one, and only one correct way to parse an HTTP message, why do all our
+libraries reinvent the wheel?
+
+They mix I/O with everything else!
+
+- httplib: state machine and parser mixed w/ I/O
+- aiohttp/Tornado/Twisted: state machine and parser use concurrency primitives
+
+Choice of I/O limits choice of libraries! Or, if you want to use requests,
+there are certain things you simply can't do, like use Tornado!
+
+## So what?
+
+We're wasting our time and duplicating effort! Did the aiohttp authors *need*
+to write new HTTP parsers? No, of course not. They didn't want to write it,
+they simply had to.
+
+It's harder to experiment, because you have to expend so much effort on a new
+parser, or use an existing one w/ all its baggage.
+
+We duplicate bugs. HTTP is deceptively difficult to parse, with lots of common
+mistakes. Multiple python libraries make the same mistake.
+
+It limits our ability to optimize. Optimizing is hard, and optimizing a
+specific component is especially difficult. Optimizing is a skill, and it's not
+a common one. When you tie I/O to your parser, you tie your users hands.
+
+## How do we avoid this problem?
+
+What are we doing wrong? Don't do I/O! At all! Ever! (In your parsers and state
+machines...)
+
+When you're doing I/O, you should be able to pick up any old parser and plug it
+in. When you're writing a parser, keep a big hard wall between the parser and
+the I/O.
+
+Alternative API:
+
+    events = handle_data(in_bytes)
+    out_bytes = perform_action()
+
+The API doesn't care about I/O, it just worries about understanding the bytes,
+not about how the bytes get there, or how they go away.
+
+This isn't all-purpose. HTTP/2 has control flow. This is where documentation
+comes in.
+
+Now, you wrap your parser in a high-level wrapper that handles the I/O. You
+have your high-level API, and it exercises sockets, and it exercises parsers,
+but never the twain shall meet.
+
+
+## Why bother?
+
+Testing a library that does I/O is nearly impossible to test! This is really
+unpleasant! (Look at urllib3's tests!)  But if you're just handling bytes, then
+it's easy to test, and easy to write more tests.
+
+I/O is now application-specific. It's hard to write high-performance I/O. If
+you don't need to solve it, don't.
+
+This lets you build a toolbox of great implementations of things. The Python
+community needs one toolbox of really really good HTTP tools.
+
+## Examples
+
+- hyper-h2, an HTTP/2 protocol stack; http://python-hyper.org/h2
+- h11, for HTTP/1.1; http://github.com/njsmith/h11
+
+
+
+# Documentation-driven Development
+
+Daniele Procida
+
+DSF Board Member
+
+@EvilDMP (IRC, GitHub, Twitter)
+
+
+## Documentation-driven Development
+
+- Like TDD, puts should before is
+- establishes a shared, easily-accessible, higher-level overview of the work
+- provides a shared, easily-accessible metric of success
+- encourgaes contribution and engagement of non-programmers
+- binds programming effort into a coherent narrative
+
+## Not actually what this talk is about
+
+How else does documentation drive development?
+
+
+## Django's documentation
+
+Exemplary. What's so good about it?
+
+- it's structured properly (tutorials, how-tos, reference, topics)
+- within that structure, it's clear and consistent
+- it covers just about everything
+- it's held to the highest standards
+- it exemplifies important values (clarity, courtesy, friendliness)
+- documentation in Django is a process, not just a product
+
+
+## What difference does this make?
+
+- It makes Django easier to lean and adopt
+- It makes people better Django programmers
+- It lowers the support burden
+- It makes the development of Django itself easier and faster
+
+Django's good documentation is good for Django!
+
+## Software is not the only thing that develops
+
+Programmers and communities of programmers grow and develop and improve. And
+programmers and communities of programmers make the software develop!
+
+
+## Developing a community
+
+Django has a community that is stable, mature, and dependable. You know where
+you are with the community as well as the software. No surprises. No huge
+crises, no lingering ills.
+
+The documentation has helped develop this community. It does four important
+things:
+
+1. represents its attitudes
+2. makens an implicit contract with its community
+3. commits to standrds of communication and information
+4. is treated as an activity, not just as content!
+
+## RTFM?
+
+Programmers hesitate to ask questions because other programmers can be
+dismissive. People are forgetful about how they learned things. They forget
+what it's like not to know something. "Here, let me Google that for you." A
+symbol of something unpleasant in programming culture.
+
+While information and documentation is considered as a product and content,
+these attitudes will continue to crop up.
+
+## Information and documentation as process and activity
+
+Information becomes informing. Documentation becomes documenting. IRC and
+forums become friendlier places, where informing and documenting are activities
+that everybody engages in.
+
+Information as communicative transactions between agents:
+
+- clarity
+- intelligibility
+- relevance
+- comprehension
+- attention to the needs and abilities of the other party
+- affirmation of mutual understanding
+
+Good documentation shows respect. If the reader doesn't understand, the
+documentation is at fault, not the reader, and the documentation can be
+improved.
+
+This respect for the reader informs the community! It literally shapes,
+presses, forms the community, and continues to drive the development of Django.
+
+## Developing programmers
+
+How do we develop programmers? Good documentation forms
+programmers. Documentation also:
+
+- represents an easy way in for new contributors
+- is almost always welcome
+- raises its author's level of understanding
+
+The structure of Django's documentation guides new contributions. The clarity
+demonstrates how, where, and what to write, the same as well-written code does.
+
+Contributions to Django's documentation are taken seriously and held to the
+highest standards. They receive the same rigorous review and support as code
+contributions.
+
+Contributions to Django's documentation (and the contributors that make them)
+are valued and recognized. People can advance in the community purely through
+writing documentation.
+
+Documenting code is the best possible way to understand it. This helps its own
+developers understand their own code better. Everyone agrees about this, though
+few actually practice it!
+
+Thus, Django does documentation-driven development. Through its documentation
+it develops, advances, and improves its community and its developers, quite
+apart from its code.
+
+## What can your project do?
+
+It can't be accomplished overnight! This is about attitudes, which are hard to
+change. But some steps that can be taken are easy, and will shape the attitudes.
+
+Practical steps!
+
+- Structure your documentation correctly (tutorials, how-to, reference,
+  topics). See Django's documentation front page as an example.
+- Make your documentation policies as rigorous as your code policies.
+- Document your documentation. What are the policies? What is expected in each
+  section?
+- Value your documentation contributors. Recognize them publicly.
+- Value the activity of documentation and information. Set aside time for it.
+
+More practical steps:
+
+- Attend a Write the Docs conference or workshop: writethedocs.org
+- Make being a Documentation manager part of someone's role
+- Spend money and time on documentation.
+
+Documentation is becoming a movement.
+
+
+# Better Testing with Less Code: Property-based Testing with Python
+
+- Matt Bachmann
+- http://github.com/Bachmann1234
+- Twitter: @mattbachmann
+- Slides: http;//goo.gl/g0mGgU
+
+
+## Testing is important!
+
+- Refactoring becomes safer and easier
+- Improves Design
+- Regression protection
+- Faster development
+
+
+## Testing is *Hard*
+
+- Test code is code
+- Isolating components can be difficult
+- Fixtures must be managed
+- The value is indirect and not very exciting
+
+## Goals
+
+- Capture the important cases
+- Minimize the coding overhead
+
+Property-based testing can help!
+
+## Property-based Testing
+
+- Describe the argument
+- Describe the result
+- Have the computer try to prove your code wrong!
+
+Let the computer do the hard work.
+
+## Sorting example
+
+Arguments: a list of integers
+
+Properties of result:
+
+- List
+- All elements preserved
+- Results are in ascending order
+
+## The library
+
+Hypothesis library: http://hypothesis.works
+
+Inspired by Haskell's QuickCheck. Has fantastic documentation. Sort of a
+structured fuzz tester.
+
+    @given(st.lists(st.integeres()))
+    def test_sort():
+        ...
+
+The given decorator comes up with scenarios to try and break the test.
+
+Has strategies:
+
+booleans, floats, strings, complex numbers, dictionaries, tuples etc.
+
+    @given(
+    st.builds(
+    Dog,
+    breed=st.sampled_from(KNOWN_BREEDS),
+    name=st.text(),
+    height=st.floats(),
+    weight=st.floats()),
+    example=Dog(breed='Labrador', ...))
+
+Potentially infinite casses. Nothing hardcoded. Very little code. However, it's
+kind of hard to write these tests until someone teaches you how.
+
+This is not magic! Not a silver bullet! Just an interesting, useful tool.
+
+## Pattern 1: The code should not explode!
+
+Generate requests, assert response body and codes (e.g. 200, 400, 404). No 500!
+
+## Pattern 2: Reversible operations
+
+- Encoding
+- Undo operations
+- Serializations
+
+Can you go back and forth and not lose data?
+
+## Pattern 3: Testing oracle (leave it alone!)
+
+### Replacing a legacy system
+
+You have a known system and an unknown system. Test the unknown system against
+the known system.
+
+Check output of new system against output of legacy system.
+
+### Comparing against brute force
+
+Test the simple brute force version against the efficient solution, and make
+sure the optimized, fancy version works the same.
+
+## Pattern 4: Stateful testing
+
+Testing more interesting systems.
+
+- Define a state
+- What operations can happen in what conditions?
+- How do operations affect the state?
+- What must be true for each step?
+
+You are building a vessel for finding bugs and bringing them back.
+
+Example: a max heap data structure.
+
+- `__init__`: construct the heap
+- `push`: grab an integer, add it to the heap
+- `merge`: merge another heap in
+- `pop`: assert result actually max
+
+Run the test. Hypothesis will find a bug, and output the exact steps it ran to
+reproduce the bug!
+
+## Property based testing
+
+- Describe the arguments
+- Describe the result
+- Have the computer try to prove you wrong
+
+## Your turn
+
+- Download Hypothesis
+- Use it
+- Share how you used it
+- FIND MORE PATTERNS OF USE
+
+
+## Resources
+
+http://hypothesis.works
+
+
+# *How* I Built a Power Debugger!
+
+How I built a power debugger out of the standard library and things I found on
+the internet.
+
+Doug Hellmann
+
+He built a debugger that runs alongside your program and records the activity
+of the program.
+
+http://github.com/dhellmann/smiley
+
+http://smiley.readthedocs.org
+
+The best talks don't just tell how to use a tool, but how it was made; the
+evolutionary process of building complex things from simple things.
+
+## Features
+
+- Record calls with data (like pdb w/o the tedium of stepping through)
+- Remote monitoring, local analysis
+- Browse history
+- Learn new tools!
+
+When he started, he didn't even know if it would work. He wanted to learn
+something along the way.
+
+Had worked with Python's trace API. Had done Python networking before. Wanted
+to try ZeroMQ, something new. Took weeks of experimenting, because of a bad
+initial choice (pubsub doesn't guarantee delivery! Oops!).
+
+
+# Zero Infrastructure
+
+- Mercedes Coyle
+- Twitter: @benzobot
+
+Building Serverless Realtime Data Pipelines w/ python and AWS Lambda
+
+## Use Case
+
+Online video syndication platform.
+
+## Intro: Realtime Systems
+
+What does "realtime" mean?
+
+- Event-based
+- Near realtime--up to several seconds between data origin and destination
+
+Legacy data system hosted 100 million events per day. Two hour delay between
+event origination and event availability.
+
+What did we need still?
+
+- Need for faster data analysis
+- Avoid logging to disk as a method of data collection
+- Scheduled jobs are not intelligent
+- Mangled data
+
+
+## Going Serverless
+
+System requirements:
+
+- Allow for streaming analytics
+- Reduce system complexity
+- Data source- and storage-agnostic
+- Flexibility
+
+
+Used API Gateway for front-end event reception.
+
+Goes to Lambda endpoint that transforms POST to PUT in Kinesis.
+
+Every 100 events, a lambda processes the events and sends them to S3.
+
+Other lambdas to do further processing.
+
+
+## API Gateway
+
+- Quick and easy to setup
+- Public HTTP interface or use API keys (Swagger is an option too)
+- Can trigger lambda or go directly to Kinesis stream
+
+
+## Kinesis Streams
+
+Multi-subscriber scaling queueing system
+
+- HTTP PUT single or batched records
+- 7 day data retention (a nice buffer!)
+- Multiple subscriber (lambdas or other consumers)
+- Horizontally scalable
+
+
+## EMR (Elastic Map Reduce)
+
+- Managed Hadoop cluster
+- Spin up, process, destroy
+
+Good for batching, or realtime. Hadoop was a constant source of trouble.
+
+## AWS Lambda
+
+- Event-driven push/pull
+- Scales up/down automatically
+- Supports Python, NodeJS, and Java
+- Stateless and Asynchronous
+
+Runs on a herd of EC2 instances, but you only pay for the actual time you use.
+
+
+## Lambda: Anatomy
+
+Lambda is just event handlers. Those events can come from API Gateway, or
+Kinesis stream, or wherever else.
+
+The heart of a lambda is the event handler, which takes event and context
+arguments.
+
+When you write a lambda, only write it to process one kind of event. New data
+source, new lambda.
+
+The context object has metadata about the running function.
+
+- The key design feature is statelessness.
+- Lambda functions don't know anything about previous events
+- Automatic retry on failure
+
+No access to disk. S3 is your disk.
+
+## Monitoring
+
+Any print or logging statement is logged to CloudWatch!
+
+Billed 400ms at a time, so optimizing can really help with costs. Can scale up
+memory or maximum duration as needed.
+
+You get basic metrics dashboard displays for high level performance data.
+
+Hard limit of 100 concurrent lambda invocations per account.
+
+
+## Testing
+
+- Can test lambda code as any other python code
+- Invoke lambda functions manually from AWS CLI
+
+        aws lambda invoke --invocation-type DryRun --function-name put-events-kinesis --payload '{"test":"data"}' outfile
+
+## Packaging
+
+- All stdlib and boto3 available.
+- Need to create a zip file of function code and any dependencies
+- Can pip install <module> -t /project-dir/ and zip contents of that directory.
+- Or you can install the contents of <virtualenv>/lib/python2.7/site-packages
+
+## Deployment
+
+Different options:
+
+- AWS CLI from Travis CI job
+- Cloud Formation template
+- Upload to S3 and deploy via Lambda
+
+
+## Summary
+
+- Python 2.7-only
+- Faster development cycles and data insights
+- Code more for business goals, less for infrastructure
+- Factor in maintenance and operational costs when pricing out
+
+API Gateway was really expensive for them. They switched back to Nginx w/ the
+logging ripped out.
+
+Vendor lock-in is a potential issue.
+
+Serverless is a tool in your toolbox. It won't solve all your problems, just
+pushes them to a different part of the stack. The server is now a black box
+that you don't own, and it can be difficult to debug.
+
+
+# Remote Call != Local Calls: Graceful Degradation When Services Fail
+
+- Dan Riti
+- @danriti
+- github.com/danriti
+- dmriti@gmail.com
+
+We're transitioning from monolithic services to microservices. This introduces
+inter-service dependencies. As dependencies increase, points of failure
+increase.
+
+We must think critically about our points of failure.
+
+Remote calls != Local calls
+
+## Question:
+
+What approaches support graceful degradation when services, networks, and data
+stores fail.
+
+Answer: Timeouts, circuit breakers, retries. Also Bulkhead pattern.
+
+- Timeouts: forcing an error when a dependency is unhealthy
+- Circuit breaker: Prevent operations
+- Retries
+
+## Use case: Time service, user service, front-end web app.
+
+How should we degrade when the time service is unavailable?
+
+- Present "Unavailable" to user.
+- Give up on requests after 3 seconds.
+- Provide fault isolation.
+
+
+## Timeouts
+
+> "Your code can't just wait forever for a response that might never come
+> sooner or later, it needs to give up. Hoe is *not* a design method."
+> -- Michael T. Nygard
+
+Time out all the things! Most client libraries support them out of the box.
+
+
+So the timeout happens. We pass the 3 seconds timeout on to the front-end
+user. There's a broken pipe in the time service log. But timeouts are not
+perfect. Easy to get started with, provides some fault isolation, response
+bound to timeout value, and still applying load to unhealthy services.
+
+
+## Circuit Breaker Pattern
+
+- Allow one subsystem to fail without destroying teh entire system.
+- Once the danger has passed, reset the breaker to restore full function to the
+  system
+- This differs from retries; circuit breakers exist to *prevent* operations
+  rather than re-execute
+
+There states:
+
+- Closed, when all requests can pass through
+- Open, all requests blocked
+- Half-open, allow one request to get through to check service health
+
+Python `pybreaker` library.
+
+    time-breaker = pybreaer.CircuitBreaken(fail_max=3, reset_timeout=30)
+
+
+When the system is healthy, the circuit breaker is closed. Life is good.
+
+More requests come in, latency increases until we encounter a timeout; circuit
+breaker increments its counter. At 3 failures, it opens the breaker and
+prevents further requests.
+
+We're now no longer bound to timeout, the user gets faster feedback, and load
+is reduced on the unhealthy service.
+
+After the reset_timeout passes, breaker goes half-open, allows an exploratory
+request to go through to test service health.
+
+Then Ops comes in and saves the day. Service is healthy again, exploratory
+request succeeds, breaker closes again.
+
+
+## Timeouts + Circuit Breaker Pattern
+
+- Graceful degradation of user experience
+- Fail fast and rapidly recover
+- Reduces load on unhealthy service
+- Avoid unhealthy service affecting the system
+- Bonus interface to monitor service health
+
+Not perfect though!
+
+- Under-provisioned services can cause "flapping"
+- Important to understand the considerations
+
+
+Questions to ask:
+
+- What do you present during failure?
+- How many times do you accept failure (max_fails)
+- How long until you attempt reset? (reset_timeout)
+- How long will you wait? (timeout)
+
+Answering these requires monitoring! Understand peak performance,
+avg. performance, etc.
+
+
+## Retries
+
+If at first you don't succeed, attempt the operation again!
+
+When should a retry be used? Does the benefit of obtaining a response outweight
+potentially increasing load on the service? One request can have a
+multiplicative effect on the system. This can get out of control quickly,
+especially with an underprovisioned service.
+
+### Considerations
+
+- Limit the number of retries per request
+- Introduce delay between retry attempts
+  - Exponential backoff
+  - Randomized jitter (http://awsarchitectureblog.com/2015/03/backoff.html);
+  helps distribute retries over the retry window.
+
+Python library: `retrying`. Has exponential retry and random jitter.
+
+So, the user service is unhealthy. We use exponential backoff, then retry, and
+it succeeds.
+
+What happens when retries go terribly wrong?
+
+### Combinational Retry Explosion!
+
+Issuing retries at multiple levels within your system w/o any retry strategy.
+
+4 attempts ^ 3 levels = 64 attempts! From a single interaction!
+
+Use retries *responsibly!*
+
+### Retry strategies
+
+Use clear response codes
+
+- Separate retriable and non-retriable errors
+- Return a specific status when overloaded
+
+Retry budgets
+
+- Per-request retry budget
+- Per-client retry budget
+- Server-wide retry budget
+
+Monitor your retry rates!
+
+### Summary
+
+- Effective when applied responsibly
+- Harmful when applied irresponsibly
+- Implement retry strategies!
+
+Google Site Reliability Engineering book
+Release It! (Nyberg)
+
+
+# Statistics for Hackers
+
+- Jake Vanderplas
+- Twitter: @jakevdp
+- Github: jakevdp
+- Web: vanderplas.com
+- Slides: http://speakerdeck.com/jakevdp/statistics-for-hackers/
+
+Statistics is hard, but with programming it's easy.
+
+## Asking the right questions
+
+> Sometimes the questions are complicated and the answers are simple.
+> -- Dr. Seuss
+
+Once you learn to ask the hard questions well, the answers will come on their
+own.
+
+## Warm-up: Coin toss
+
+When you toss a coin 30 times and see 22 heads: is it a fair coin?
+
+No: A fair coin should show 15 heads in 30 tosses. This coin is biased.
+
+Yes: Even a fair coin could show 22 heads in 30 tosses. It might be fair.
+
+### Classic method:
+
+Assume the skeptic is correct: test the Null Hypothesis.
+
+Start computing probabilities...
+
+    P(H) == 1/2
+
+    P(HH) == ...
+
+P(HHT) = (1/2)**3
+
+    P(Nh, Nt) = (N / Nh)(1/2)**Nh
+
+Binomial distribution. p value: what p do we reject the fair coin hypothesis? p < 0.005
+
+
+### The Easier Way
+
+Yeah, that was pretty awful. What about code?
+
+Just simulate it!
+
+    M = 0
+    for i in range(10000):
+        trials = randint(2, size=30)
+        if (trials.sum() >= 22):
+            m += 1
+    p = M / 10000  # 0.008149
+
+Reject fair coin at p == 0.008
+
+
+In general, computing the sampling distribution is hard.
+
+Simulating the sampling distribution is easy when we have an a priori model to
+simulate with.
+
+## Four recipes for hacking statistics
+
+1. Direct simulation
+2. Shuffling
+3. Bootstrapping
+4. Cross validation
+
+
+## Shuffling
+
+The Sneeches: stars and intelligence.
+
+Are the star-bellied sneeches smarter than the ones with no stars on thars?
+
+Test scores: `*` mean: 73.5, `x` mean 66.9, difference 6.6.
+
+Is this difference of 6.6 statistically significant?
+
+Classic method: the T test! Ugh.
+
+The biggest problem: We've entirely lost track of what question we're
+answering.
+
+One popular alternative... "Why don't you just..."
+
+    from statsmodels.stats.weightstats import ttest_ind
+    t, p, dof = ttest_ind(group1, group2, alternative='larger', usevar='unequal')
+    print(p)  # 0.186
+
+Stepping back... the deep meaning lies in the sampling distribution. Same
+principle as the coin example. How often do we get 22 heads?
+
+Let's use a sampling method instead! Unlike coin flipping, we *don't* have a
+generative model, we just have the test scores.
+
+
+Idea: simulate the distribution by shuffling the labels repeatedly and computing the desired statistic.
+
+Motivation: if the labels really don't matter, then switching the data around
+between groups shouldn't matter.
+
+So we shuffle the samples, rearrange, compute means. Plot it, then find our test data.
+
+"A difference of 6.6 is not significant at p = 0.05."
+
+### Notes on Shuffling:
+
+- works when the null hypothesis assumes two groups are equivalent
+- Like all methods, it will only work if your samples are
+  representative--always be careful about selection biases!
+- Needs care for non-independent trials. Good discussion in Simon's Resampling:
+  The New Statistics.
+
+## Bootstrapping
+
+Yertle's Turtle Tower
+
+How high can Yertle stack his turtles?
+
+Observe 20 of Yertle's turtle towers...
+
+What is the mean of the number of turtles in Yertle's stack?
+
+What is the uncertainty of this estimate?
+
+### Classic method
+
+Compute a sample mean, a standard error of the mean... Ugh.
+
+What assumptions go into this? Can we simulate this instead?
+
+### Bootstrap resampling
+
+Idea: simulate the distribution by drawing samples with replacement
+
+Motivation: the data estimates its own distribution--we draw random samples
+from this distribution.
+
+Repeat this several 1000 times...
+
+Recovers the Analytic Estimate!
+
+    for i in range(10000):
+        sample = N[randint(20, size=20)]
+        xbar[i] = mean(sample)
+        mean(xbar), std(xbar)
+        # (28.9, 2.9)
+
+
+### Bootstrap on Linear Regression
+
+What is the relationship between speed of wind and the height of the turtle
+tower?
+
+    for i in range(100000):
+        i = randint(20, size=20)
+        slope, intercept = fit(x[i], y[i])
+        results[i] = (slope, intercept)
+
+### Notes on bootstrapping
+
+- Boottrap resampling is well-studied on solid theoretical grounds
+- bootstrapping often doesn't work well for rank-based statistics (e.g. max value)
+- Works poorly w/ very few samples (n > 20 is a good rule of thumb)
+- As always, be careful about selection biases, and non-independent data!
+
+
+## Cross validation
+
+A way to determine how well a model is fitting data when you don't have an a
+priori description of the data.
+
+Onceler Industries: Sales of Thneeds
+
+Thneed sales seem to show a trend with temperature... scatter plot.
+
+Let's predict based on temperature what thneed sales will be for that day.
+
+But which model is a better fit? Two different lines.
+
+Can we judge by root-mean-square error? RMS error = 63.0, vs. 51.5.
+
+Well, let's see...
+
+### Classic method
+
+... ugh.
+
+Wait, what question were we trying to answer again?
+
+### Cross validation
+
+1. randomly split data into two sets
+2. Find the best model for each subset.
+3. Flip-flop the data. Compare models across subsets.
+4. Compute RMS error for each model. Repeat for as long as you have patience!
+5. Compare cross-validated RMS for models.
+
+### Notes on cross-validation
+
+- This was "2-fold" cross-validation; other CV schemes exist and may perform
+  better for your data (see e.g. scikit-learn docs)
+- Cross-validation is the go-to method for model evaluation in machine
+  learning, as statistics of the models are often not known in the classical
+  sense.
+- Again: caveats about selection bias and independence of data
+
+
+## Summary
+
+Sampling methods allow you to use intuitive computational approaches in place
+of often non-intuitive statistical rules. If you can write a for-loop you can
+do stasistical analysis.
+
+
+## Things I didn't have time for:
+
+- Bayesian methods: very intuitive and powerful approaches to more
+  sophisticated modeling. Baysian Methods for Hackers by Cam Davidson Plant.
+
+- Selection Bias: if you get data selection wrong, you'll have a bad
+  time. Watch Statistical Thinking for Data Science video
+
+- Detailed considerations on use of sampling shufling and bootstrapping.
+
+
+# Get instrumented w/ Prometheus
+
+- ox.cx/p
+- @hynek
+- vrmd.de
+
+
+## How to represent Service Level
+
+- Define Indicator
+- formulate Objective
+- Define agreements if objectives get missed
+
+## What are metrics?
+
+Timestamped numbers in a database that can be corellated.
+
+You get them by instrumenting a system and reporting to a time-series database.
+
+Instrument the app, the database, the environment, and the business.
+
+The problem has been deciding on multiple options with various trade-offs, none
+of them very easy to use or integrated.
+
+## Prometheus is different
+
+Well-rounded and opinionated metrics and monitoring system.
+
+A re-implementation of Google's internal monitoring system, "Bork".
+
+## Architecture
+
+A single binary, no dependencies, written in Go. Focuses on the effective
+storage of time series, a named stream of float samples.
+
+4 types:
+
+1. counters only go up
+2. gauges go up or down
+3. summaries compute rates and averages and percentiles of measurement
+   (e.g. requests/sec.)
+4. histograms for observing values and tracking averages, with buckets
+   (e.g. 1s, 0.5s, 0.25s)
+
+
+## Averages and Percentiles
+
+Averages are less useful than you think!
+
+Measuring request latencies: fast requests, good UX; slow requests, bad UX.
+
+- avg(request time) != avg(UX)
+- avg({1,1,1,1,10}) == 2.8
+
+Production data is *always* skewed. No bell curves in production.
+
+Average just muddles everything together, makes you focus on the average
+instead of fixing the outliers.
+
+- median({1, 1, 1, 1 10}) == 1
+- median({1, 1, 100_000}) == 1
+
+Percentiles partition the data set into 100 parts. You look at the Nth value for the Nth percentile.
+
+If 50th percentile == 1 ms, 50% of requests are done by 1ms. Same as median.
+
+- P({1, 1, 100_000})
+- 50th percentile: 1
+- 95th percentile: 90_000
+
+You still need the average to compare the percentile with.
+
+## Naming
+
+Graphite made you put all the info in your name. Prometheus gives you
+structured metadata!
+
+    <app>_http_reqs_<total>(meth="POST", path="/msgs", backend="1")
+
+Metrics are pull-based. The app server exposes its metrics, and Prometheus
+comes along and scrapes them.
+
+Consequences:
+
+1. resolution = scraping interval; trading off precision and disk space
+2. missing scrapes = less resolution; no lost data, just resolution. Good for
+   monitoring, not so much for counting. Postgres or InfluxDB might be better
+   for that.
+
+## Pull problems
+
+### short lived jobs
+
+There's a "push gateway" that your app can push to, and Prometheus can pull later.
+
+
+### target discovery
+
+Configuration: automatically applied to metrics metadata. Use Consul for discovery.
+
+
+### Heroku / NATed systems
+
+Intended to run in the same network as its target.
+
+## Pull advantages
+
+- Multiple prometheuses is easy!
+- Outage detection is easier!
+- Predictable, no self-DoS. More traffic doesn't mean more strain.
+- Easy to instrument 3rd parties. Most systems expose instrumentation. Just
+  need to transform that into something Prometheus understands!
+- Metrics format is human readable!
+
+## Querying: PromQL
+
+Aggregation: many related time series become one or a few. Multiple backends, total request rate over all backends.
+
+    sum(rate(req_seconds_count[1m]))
+
+To filter by datacenter:
+
+    sum(rate(req_seconds_count{dc="west"}[1m]))
+
+To get all datacenters:
+
+    sum(rate(req_seconds_count[1m])) by dc
+
+Percentiles:
+
+    histogram_quantile(0.9, rate(req_seconds_bucket[10m]))
+
+Percentiles are dependent on sampling rate, and defined buckets.
+
+## Internal graphing
+
+- great for ad-hoc
+- only 1 expr per graph, so no correlation
+
+## Promdash
+
+Best integration! Former official one, but deprecated.
+
+## Grafana
+
+Use it! It looks great, and works great.
+
+- pretty and powerful
+- *many* integrations! Allows multiple backends (graphite, influxdb, prometheus, etc.)
+
+## Alerting and Scrying
+
+Alerts can be predictive, using linear regression.
+
+## Federation
+
+Prometheuses can be federated; downstream prometheus can downsample, or collect from children
+
+## Ecosystem
+
+Lots of integrations, exporters, bridges, etc. But native is better!
+
+### node_eporter
+
+Instruments a system from the inside.
+
+For containers, use cAdvisor.
+
+Gives system insight: load, procs, memory, network, disk, I/O
+
+
+### mtail
+
+- follow log files
+- extract metrics using regex
+- can be better than direct
+
+## Summary so far
+
+- system stats
+- outside look of app, edge metrics
+- instrumentation of 3rd party components
+
+## Code instrumentation!
+
+    pip install prometheus_client
+
+Start the http server, gives you process statistics for free.
+
+Define some metrics. These make simple decorators for handlers. Middleware
+might be better. Also can be context managers. Counters can just be a call to
+inc().
+
+
+    pip install prometheus_async
+
+Handles asyncio, twisted, just works. aiohttp-based metrics export. Also in
+thread!
+
+Consul agent integration!
+
+
+
+# Computational Physics
+
+Pramod Gupta
+
+Newton and Kepler used advanced math to derive planetary motion laws.
+
+Feynman: Orbits may be approximated step by step with arithmetic.
+
+
+# Small Batch Artisanal Bots: Let's Make Friends
+
+- Elizabeth Useltonu
+- @lizuselton
+
+
+## Good for beginning programmers:
+
+Things making bots taught me:
+
+- APIs
+- OAuth
+- VMs
+- AWS
+- Scheduled Background Jobs
+
+## Paragons of Botdom
+
+- @StealthMountain -- corrects "sneak peak" to "sneak peek"
+- @viralhulk by @undoingsarah
+- @oliviataters, the teenage twitterbot by Rob Dubbin
+- @HinkyPinkyQs and @HinkyPinkyAs by @thricedotted (writes hinky pinky jokes)
+- @erowidrecruiter by @aphyr
+- @congressedits by EdSummers
+
+## Oauth: your secret handshake w/ twitter
+
+- Consumer Key (API Key)
+- Consumer Secret (API Secret)
+- Access Token
+- Access Token Secret
+
+Twitter has streaming and REST API. We will be using the REST API.
+
+## The Web UI Part
+
+Create an account for your bot: https://apps.twitter.com
+
+Be sure to change the permissions from read-only to read-write access.
+
+## Library vs. API with no wrapper
+
+tweepy -- has good documentation and examples.
+
+## Sweet Datasets
+
+### Civic data
+
+Warehouses of data!
+
+Pros:
+
+- It's all yours!
+- There's so much
+
+Cons:
+
+- Sometimes it's of negligible use
+- Sometimes it's poorly formatted or maintained
+
+Like rummaging through the bargain bin at the thrift store.
+
+Good example: https://data.seattle.gov
+
+### Scraping: The Internet is your Dataset!
+
+Works best on tables, formatted data. Wendy Grueses talk on scraping data a
+good resource.
+
+Pros:
+
+- Any data can be yours
+- Get new data automatically!
+
+Cons:
+
+- More work
+- People can change their website and break your scraper
+
+Mechanize and BeautifulSoup are good libraries. (Also scrapy!)
+
+### Corpora: Someone else's generosity!
+
+Pros:
+
+- Ready-made
+- You can add to the community by making some!
+
+Cons:
+
+- There isn't always one for what you want
+- Hard to find a central location
+
+- Amazon datasets aws.amazon.com/datasets
+- github.com/dariusk/corpora
+- Project Gutenberg
+- NLTK
+
+#### NLTK
+
+- Sentiment analysis
+- Pronunciation keys
+- Synonyms
+- Deep weird linguistics stuff
+- Build your own corpora...
+
+### Markov Chains: Faking it!
+
+### Twitter
+
+Pros:
+
+- So much data
+- You're already integrating w/ Twitter anyway
+- In bite-sized chunks perfect for tweeting
+
+Cons:
+
+- People on the internet are terrible
+
+
+## Getting your bot to bot w/o you
+
+AWS EC2 Micro instance
+
+- Free for a year
+- Minimal setup
+- Learn to use a VM
+
+Cron jobs!
+
+## Bot etiquette
+
+- Don't harass people
+- Make more amusement than you do annoyance
+- Don't advertise things, no one cares
+- Opt in, not opt out
+- Show off with #botALLY
+
+Get out there and make some bots!
+
+
+# Revitalizing Python Game Development
+
+- Jacob Kovac
+- Kivy Core Developer
+- KivEnt developer
+
+
+## Resources
+
+- T-Machine Blog: http://t-machine.org
+- kivy.org
+- kivent.org
+
+## Major obstacles:
+
+- Platforms: getting code to run everywhere
+- Distribution: getting code in front of people
+- Performance: Using Cython to build games thate are part Python and part C
+
+
+## Why replace Pygame/Vispy/Pyglet?
+
+- Fundamental approach requires optimized games to rewrite performance
+  sensitive bits in Cython
+- Lmited or no compatibility w/ Android or iOS platforms
+- Limited support for modern input devices such as touch screens
+- Some of these are very low level, writing your own event loop, making blt
+  calls, flipping buffers, etc.
+- Kivy addresses all of these simultaneously, while providing a simpler, more
+  powerful API.
+
+
+## Platform specific concerns
+
+- Making use of platform specific features; Cython, Pyobjus, Pyjinius, Plyer
+- Making sure all your dependencies work everywhere
+    - Something built to compile everywhere, such as SDL2 or
+    - Substituting various libraries based on platform, abstracting over the
+      various solutions with an api that finds the common ground.
